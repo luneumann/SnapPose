@@ -1,0 +1,20 @@
+# SnapPose config. Profile sets the defaults; everything under "overrides" wins.
+license_mode: commercial        # blocks non-commercial components
+profile: precise
+mode: auto                      # auto | prior   (global mode: planned)
+# time_budget_ms: 600           # hard budget, pipeline returns the best result so far
+
+prior:
+  tolerance_t_mm: [10, 10, 10]  # x, y, z search window around the prior
+  tolerance_r_deg: [5, 5, 5]    # rotation window (euler xyz)
+  frame: camera                 # camera | object
+
+verification:                   # calibrate per object and sensor!
+  min_inlier_ratio: 0.8
+  min_explained_ratio: 0.85
+  max_residual_mm: 1.5
+  min_score_margin: 0.05
+
+overrides: {}
+#  s3: {refine_iters: 3}
+#  s5: {icp_iters: 40, icp_voxel_mm: 1.0}

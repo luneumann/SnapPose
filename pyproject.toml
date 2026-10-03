@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snappose"
+version = "0.1.0"
+description = "Single-shot 6D pose matching of a known CAD object in one RGB-D frame (prior mode, CPU-only, configurable time/accuracy)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "scipy>=1.11", "trimesh>=4.0", "opencv-python>=4.9", "pyyaml>=6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+realsense = ["pyrealsense2"]
+
+[project.scripts]
+snappose = "snappose.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
