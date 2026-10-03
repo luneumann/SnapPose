@@ -43,6 +43,18 @@ class S5:
     icp_enabled: bool = True
     icp_iters: int = 30
     icp_voxel_mm: float = 1.5
+    use_window: bool = True      # clamp refinement to the prior tolerance window (x1.25)
+
+
+@dataclass
+class Edges:
+    enabled: bool = True          # only active if an image is passed to match()
+    weight: float = 1.0           # relative influence of the edge group vs the depth group
+    score_weight: float = 0.7     # share of the image-edge term in the hypothesis score
+    iters: int = 20
+    max_depth_loss: float = 0.10  # edge result must keep the depth inlier ratio within this of the depth-only result
+    min_edge_gain: float = 0.10   # ... and improve the edge inlier ratio by at least this
+    max_px: float = 12.0          # edge residuals above this are ignored (shrinks to 3 px)
 
 
 @dataclass
@@ -87,7 +99,7 @@ PROFILES: dict[str, dict] = {
     },
 }
 
-_SECTIONS = {"s0": S0, "s2": S2, "s3": S3, "s4": S4, "s5": S5, "prior": Prior, "verification": Verification}
+_SECTIONS = {"s0": S0, "s2": S2, "s3": S3, "s4": S4, "s5": S5, "edges": Edges, "prior": Prior, "verification": Verification}
 
 
 @dataclass
@@ -101,6 +113,7 @@ class Config:
     s3: S3 = field(default_factory=S3)
     s4: S4 = field(default_factory=S4)
     s5: S5 = field(default_factory=S5)
+    edges: Edges = field(default_factory=Edges)
     prior: Prior = field(default_factory=Prior)
     verification: Verification = field(default_factory=Verification)
 

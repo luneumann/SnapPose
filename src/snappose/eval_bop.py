@@ -54,7 +54,7 @@ def load_models(root: Path, obj_ids: set[int] | None):
 
 def run(dataset: str, profile: str = "balanced", per_object: int = 30, prior_t: float = 6.0, prior_r: float = 3.0,
         min_visib: float = 0.7, obj_ids: list[int] | None = None, seed: int = 0, overrides: dict | None = None,
-        bop19_only: bool = True, split: str = "test") -> dict:
+        bop19_only: bool = True, split: str = "test", use_image: bool = True) -> dict:
     root = find_root(Path(dataset), split)
     rng = np.random.default_rng(seed)
     models = load_models(root, set(obj_ids) if obj_ids else None)
@@ -107,13 +107,25 @@ def run(dataset: str, profile: str = "balanced", per_object: int = 30, prior_t: 
             R_gt = Rotation.from_matrix(np.array(g["cam_R_m2c"]).reshape(3, 3)).as_matrix()
             T_gt = make_T(R_gt, np.array(g["cam_t_m2c"]))
             prior = perturb(T_gt, rng, prior_t, prior_r)
-            res = matcher.match(f"obj_{oid:02d}", depth, K, prior)
+            img = None
+            if use_image:
+                for kind in ("rgb", "gray"):
+                    cand = [q for q in (sdir / kind / f"{int(im):06d}.png", sdir / kind / f"{int(im):06d}.tif",
+                                        sdir / kind / f"{int(im):06d}.jpg") if q.exists()]
+                    if cand:
+                        img = cv2.imread(str(cand[0]), cv2.IMREAD_UNCHANGED)
+                        if img is not None and img.ndim == 3:
+                            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        break
+            res = matcher.match(f"obj_{oid:02d}", depth, K, prior, rgb=img)
             et, er = pose_error(res.T_cam_obj, T_gt, sym)
             add = add_error(res.T_cam_obj, T_gt, sub, symmetric)
             rows.append({"obj": oid, "scene": sid, "im": int(im), "t_err": et, "r_err": er,
                          "add_ok": add < 0.1 * inf["diameter"], "status": res.status,
-                         "ms": res.timing_ms["total"], "prior_t_err": pose_error(prior, T_gt, sym)[0], "prior_r_err": pose_error(prior, T_gt, sym)[1]})
-    return summarize(rows, dataset, profile)
+                         "ms": res.timing_ms["total"], "metrics": res.metrics, "conf": res.confidence, "prior_t_err": pose_error(prior, T_gt, sym)[0], "prior_r_err": pose_error(prior, T_gt, sym)[1]})
+    out = summarize(rows, dataset, profile)
+    out["rows"] = rows
+    return out
 
 
 def summarize(rows: list[dict], dataset: str, profile: str) -> dict:

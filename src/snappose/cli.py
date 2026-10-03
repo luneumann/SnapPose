@@ -128,7 +128,7 @@ def cmd_bop(args) -> int:
     from . import eval_bop
     res = eval_bop.run(args.dataset, profile=args.profile or "balanced", per_object=args.per_object,
                        prior_t=args.prior_t, prior_r=args.prior_r, obj_ids=args.obj, seed=args.seed,
-                       overrides=_parse_set(args.set), min_visib=args.min_visib, split=args.split)
+                       overrides=_parse_set(args.set), min_visib=args.min_visib, split=args.split, use_image=not args.no_image)
     print(eval_bop.format_report(res))
     if args.json:
         Path(args.json).write_text(json.dumps(res, indent=2))
@@ -191,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--prior-t", type=float, default=6.0)
     p.add_argument("--prior-r", type=float, default=3.0)
     p.add_argument("--split", default="test", help="test | val (ITODD ground truth is only public for val)")
+    p.add_argument("--no-image", action="store_true", help="depth only (ignore rgb/gray images)")
     p.add_argument("--min-visib", type=float, default=0.7)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--json")

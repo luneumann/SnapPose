@@ -11,7 +11,7 @@ from ..onboarding import Model
 
 def icp(T: np.ndarray, scene_pts: np.ndarray, model: Model, iters: int, tau0: float, tau1: float,
         deadline: float | None = None, min_iters: int = 3, tol_mm: float = 0.02,
-        min_pts: int = 12) -> tuple[np.ndarray, int]:
+        min_pts: int = 12, window=None) -> tuple[np.ndarray, int]:
     """Refine T_cam_obj. Correspondence radius tau shrinks geometrically tau0 -> tau1.
 
     Stops early on convergence or when `deadline` (perf_counter) passes after `min_iters` iterations.
@@ -43,6 +43,8 @@ def icp(T: np.ndarray, scene_pts: np.ndarray, model: Model, iters: int, tau0: fl
         Rn = R @ Dr.T                                # T <- T * D^-1
         t = t - Rn @ x[3:]
         R = Rn
+        if window is not None:
+            R, t = window.clamp(R, t)
         done += 1
         if np.linalg.norm(x[3:]) < tol_mm and np.linalg.norm(x[:3]) < 1e-4:
             break

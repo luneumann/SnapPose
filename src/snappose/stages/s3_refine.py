@@ -21,9 +21,22 @@ from .s5_icp import icp
 
 
 @REFINERS.register("icp", license="own")
-def refine_icp(T, scene_pts, model, cfg: Config, tau0: float, tau1: float, deadline):
+def refine_icp(T, scene_pts, model, cfg: Config, tau0: float, tau1: float, deadline, window=None):
     T, _ = icp(T, scene_pts, model, cfg.s3.iters_per_round, tau0, tau1, deadline=deadline,
-               min_iters=2, tol_mm=cfg.s3.early_stop_delta_mm)
+               min_iters=2, tol_mm=cfg.s3.early_stop_delta_mm, window=window)
+    return T
+
+
+@REFINERS.register("joint", license="own")
+def refine_joint(T, scene_pts, model, cfg: Config, tau0: float, tau1: float, deadline, window=None, *, edge=None, f0=0.0, f1=1.0):
+    """Depth + image-edge refinement (needs `edge=(EdgeMap, depth, K, cap0_px)`)."""
+    from . import s5b_edges
+    em, depth, K, cap0 = edge
+    cap_a = cap0 * (3.0 / cap0) ** f0
+    cap_b = cap0 * (3.0 / cap0) ** f1
+    T, _ = s5b_edges.refine(T, scene_pts, model, em, depth, K, cfg.s3.iters_per_round, tau0, tau1,
+                            weight=cfg.edges.weight, max_px=cap_a, min_px=cap_b, window=window,
+                            deadline=deadline, tol_mm=cfg.s3.early_stop_delta_mm)
     return T
 
 
@@ -43,8 +56,10 @@ def auto_tau0(cfg: Config) -> float:
     return float(np.clip(0.6 * max(cfg.prior.tolerance_t_mm), 4.0, 15.0))
 
 
-def run(hyps: list[np.ndarray], scene: Scene, model: Model, cfg: Config, budget: Budget) -> RefineOutput:
-    refine = REFINERS.get(cfg.s3.refiner, cfg.license_mode)
+def run(hyps: list[np.ndarray], scene: Scene, model: Model, cfg: Config, budget: Budget, window=None,
+        edge=None) -> RefineOutput:
+    name = "joint" if (edge is not None and cfg.s3.refiner == "icp") else cfg.s3.refiner
+    refine = REFINERS.get(name, cfg.license_mode)
     pts = voxelize(scene, cfg.s3.coarse_voxel_mm)
     tau0 = auto_tau0(cfg)
     tau_end = max(2.0 * cfg.s3.coarse_voxel_mm, cfg.s4.inlier_tau_mm)
@@ -67,8 +82,12 @@ def run(hyps: list[np.ndarray], scene: Scene, model: Model, cfg: Config, budget:
         t_round = time.perf_counter()
         t0_r, t1_r = tau0 * ratio ** (r / rounds), tau0 * ratio ** ((r + 1) / rounds)
         for h in active:
-            h.T = refine(h.T, pts, model, cfg, t0_r, t1_r, s3_deadline)
-            h.score = s4_score.score_pose(h.T, scene.depth, scene.K, model, cfg.s4.inlier_tau_mm, pts).score
+            if name == "joint":
+                h.T = refine(h.T, pts, model, cfg, t0_r, t1_r, s3_deadline, window, edge=edge, f0=r / rounds, f1=(r + 1) / rounds)
+            else:
+                h.T = refine(h.T, pts, model, cfg, t0_r, t1_r, s3_deadline, window)
+            h.score = s4_score.score_pose(h.T, scene.depth, scene.K, model, cfg.s4.inlier_tau_mm, pts,
+                                           (edge[0], cfg.edges.score_weight) if edge is not None else None).score
         active.sort(key=lambda h: -h.score)
         # budget pressure forces pruning even for prune_schedule "none"
         tight = s3_deadline is not None and (s3_deadline - time.perf_counter()) < 1.5 * (time.perf_counter() - t_round)

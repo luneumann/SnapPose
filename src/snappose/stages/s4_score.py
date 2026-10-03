@@ -28,10 +28,27 @@ class Score:
     explained: float        # scene -> model term (1.0 if no scene points were given)
     residual_mm: float      # mean |dz| of inliers
     n_visible: int
+    edge_ratio: float = -1.0     # image-edge agreement (-1 = not available)
+    depth_score: float = 0.0     # score before blending with the edge term
 
 
 def score_pose(T: np.ndarray, depth: np.ndarray, K: np.ndarray, model: Model, tau_mm: float,
-               scene_pts: np.ndarray | None = None) -> Score:
+               scene_pts: np.ndarray | None = None, edge=None) -> Score:
+    """edge = (EdgeMap, edge_weight) blends the image-edge inlier ratio into the score."""
+    sc = _depth_score(T, depth, K, model, tau_mm, scene_pts)
+    sc.depth_score = sc.score
+    if edge is not None:
+        from .s5b_edges import edge_inlier_ratio
+        em, w = edge
+        e = edge_inlier_ratio(T, model, em, depth, K)
+        sc.edge_ratio = e
+        if e >= 0:
+            sc.score = (1.0 - w) * sc.score + w * e
+    return sc
+
+
+def _depth_score(T: np.ndarray, depth: np.ndarray, K: np.ndarray, model: Model, tau_mm: float,
+                 scene_pts: np.ndarray | None = None) -> Score:
     p = model.score_points @ T[:3, :3].T + T[:3, 3]
     if model.watertight:
         n = model.score_normals @ T[:3, :3].T
