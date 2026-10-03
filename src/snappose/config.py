@@ -1,4 +1,4 @@
-"""Config: profile -> YAML overrides -> call overrides -> time budget (see docs/SPEC section 3.3)."""
+"""Config: profile -> YAML overrides -> call overrides -> time budget."""
 from __future__ import annotations
 
 import copy

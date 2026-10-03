@@ -1,7 +1,7 @@
 """S3: multi-hypothesis refinement with scoring and successive halving.
 
 Refiners are pluggable (registry). V1 ships a geometric refiner (coarse ICP rounds). A render-and-compare
-network refiner (MegaPose) can be added as another registry entry; see docs/SPEC.md section 3.2.
+network refiner (MegaPose) can be added as another registry entry.
 """
 from __future__ import annotations
 
