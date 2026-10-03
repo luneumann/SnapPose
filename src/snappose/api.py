@@ -57,7 +57,7 @@ class PoseMatcher:
                                         deadline=budget.deadline, tol_mm=cfg.s3.early_stop_delta_mm)
         t1 = time.perf_counter()
         tm['s5'] = tm.get('s5', 0.0) + (t1 - t0) * 1000.0
-        sc = s4_score.score_pose(T, scene.depth, scene.K, model, cfg.s4.inlier_tau_mm,
+        sc = s4_score.score_pose(T, scene.depth, scene.K, model, scene.tau_mm,
                                  s0_preprocess.voxelize(scene, cfg.s3.coarse_voxel_mm),
                                  (em, cfg.edges.score_weight) if em is not None else None)
         tm['s4'] = tm.get('s4', 0.0) + (time.perf_counter() - t1) * 1000.0
@@ -115,7 +115,7 @@ class PoseMatcher:
         margin = s6_verify.score_margin(best, ref.ranked[1:], model.symmetry)
         T_out = model.symmetry.canonicalize(T, prior)
         exhausted = ref.budget_exhausted or budget.exhausted()
-        status = s6_verify.status(sc, margin, exhausted, cfg)
+        status = s6_verify.status(sc, margin, exhausted, cfg, scene.tau_mm)
         lap("s6", t)
         timing["total"] = budget.elapsed_ms()
 
@@ -123,7 +123,7 @@ class PoseMatcher:
         return MatchResult(
             object_id=object_id, status=status, T_cam_obj=T_out, confidence=sc.score,
             metrics={"inlier_ratio": sc.inlier_ratio, "explained_ratio": sc.explained, "edge_ratio": sc.edge_ratio,
-                     "residual_mm": sc.residual_mm, "score_margin": margin, "edges_used": float(edge_used)},
+                     "residual_mm": sc.residual_mm, "score_margin": margin, "edges_used": float(edge_used), "tau_mm": scene.tau_mm},
             mode="prior", profile=cfg.profile, symmetry_canonicalized=not model.symmetry.is_trivial,
             budget_exhausted=exhausted, timing_ms=timing,
             versions={"pipeline": __version__, "refiner": cfg.s3.refiner, "backbone": "none"})

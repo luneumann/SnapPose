@@ -10,10 +10,10 @@ prior:
   frame: camera                 # camera | object
 
 verification:                   # calibrate per object and sensor!
-  min_inlier_ratio: 0.8
-  min_explained_ratio: 0.85
+  min_inlier_ratio: 0.85
+  min_explained_ratio: 0.5
   max_residual_mm: 1.5
-  min_score_margin: 0.05
+  min_score_margin: 0.0
 
 overrides: {}
 #  s3: {refine_iters: 3}

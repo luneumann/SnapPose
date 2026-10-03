@@ -25,10 +25,9 @@ class Window:
             dt = self.R0.T @ dt
         dt = np.clip(dt, -self.tol_t, self.tol_t)
         t = self.t0 + (self.R0 @ dt if self.frame == "object" else dt)
-        if self.frame == "camera":
-            rel = R @ self.R0.T
-        else:
-            rel = self.R0.T @ R
+        rel = R @ self.R0.T if self.frame == "camera" else self.R0.T @ R
+        if np.arccos(np.clip((np.trace(rel) - 1.0) / 2.0, -1.0, 1.0)) <= self.tol_r.min():
+            return R, t                      # fast path: well inside the window on every axis
         e = Rotation.from_matrix(rel).as_euler("xyz")
         ec = np.clip(e, -self.tol_r, self.tol_r)
         if np.any(ec != e):

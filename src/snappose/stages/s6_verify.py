@@ -21,12 +21,13 @@ def score_margin(best: Hypothesis, others: list[Hypothesis], sym: Symmetry) -> f
     return 1.0
 
 
-def status(sc: Score, margin: float, budget_exhausted: bool, cfg: Config) -> str:
+def status(sc: Score, margin: float, budget_exhausted: bool, cfg: Config, tau_mm: float = 2.0) -> str:
     v = cfg.verification
+    max_res = max(v.max_residual_mm, 0.75 * tau_mm)     # noisy sensors: residuals scale with the tolerance
     ok = (sc.inlier_ratio >= v.min_inlier_ratio and sc.explained >= v.min_explained_ratio
-          and sc.residual_mm <= v.max_residual_mm
+          and sc.residual_mm <= max_res
           and margin >= v.min_score_margin)
-    if sc.n_visible == 0 or sc.inlier_ratio < 0.5 * v.min_inlier_ratio or sc.residual_mm > 3.0 * v.max_residual_mm:
+    if sc.n_visible == 0 or sc.inlier_ratio < 0.5 * v.min_inlier_ratio or sc.residual_mm > 3.0 * max_res:
         return "NOK"
     if ok and not budget_exhausted:
         return "OK"

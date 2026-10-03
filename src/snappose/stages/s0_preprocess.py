@@ -1,7 +1,7 @@
 """S0: depth filtering, optional downscale, ROI around the prior, point extraction."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -18,6 +18,8 @@ class Scene:
     roi_points: np.ndarray     # Nx3 camera points inside the ROI sphere (not yet voxelised)
     roi_center: np.ndarray
     roi_radius: float
+    cache: dict = field(default_factory=dict)
+    tau_mm: float = 2.0        # inlier tolerance used by scoring/refinement (fixed or estimated)
 
 
 def filter_depth(depth: np.ndarray, cfg: Config) -> np.ndarray:
@@ -47,6 +49,19 @@ def scale_inputs(depth: np.ndarray, K: np.ndarray, scale: float) -> tuple[np.nda
     return d, Ks
 
 
+def estimate_tau(depth_crop: np.ndarray, lo: float = 2.0, hi: float = 8.0) -> float:
+    """Sensor noise/quantisation proxy: median non-zero depth step between horizontal neighbours on one surface.
+
+    Structured-light sensors give ~0.1 mm, Kinect-class sensors 3-7 mm (quantised disparity)."""
+    a, b = depth_crop[:, :-1], depth_crop[:, 1:]
+    ok = (a > 0) & (b > 0)
+    x = np.abs(a - b)[ok]
+    x = x[(x > 0) & (x < 30)]
+    if len(x) < 100:
+        return 2.0
+    return float(np.clip(np.median(x), lo, hi))
+
+
 def run(depth_mm: np.ndarray, K: np.ndarray, prior: np.ndarray, model: Model, cfg: Config) -> Scene:
     d = filter_depth(depth_mm, cfg)
     d, Ks = scale_inputs(d, np.asarray(K, float), cfg.s0.input_scale)
@@ -70,8 +85,13 @@ def run(depth_mm: np.ndarray, K: np.ndarray, prior: np.ndarray, model: Model, cf
         crop = d[r0:r1, c0:c1]
         pts = backproject(crop, Ks, offset=(r0, c0))
         pts = pts[np.linalg.norm(pts - center, axis=1) < radius]
-    return Scene(d, Ks, pts, center, radius)
+    tau = cfg.s4.inlier_tau_mm
+    if tau is None:
+        tau = estimate_tau(d[r0:r1, c0:c1] if (c1 > c0 and r1 > r0) else d)
+    return Scene(d, Ks, pts, center, radius, tau_mm=tau)
 
 
 def voxelize(scene: Scene, voxel_mm: float) -> np.ndarray:
-    return voxel_downsample(scene.roi_points, voxel_mm)
+    if voxel_mm not in scene.cache:
+        scene.cache[voxel_mm] = voxel_downsample(scene.roi_points, voxel_mm)
+    return scene.cache[voxel_mm]

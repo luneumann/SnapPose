@@ -97,9 +97,7 @@ class Symmetry:
             return T
         best = min((T @ S for S in self.discrete), key=lambda c: rot_angle_deg(c[:3, :3], T_ref[:3, :3]))
         for axis, origin in self.continuous:
-            angles = np.radians(np.arange(-180, 180, 0.5))
-            cands = [best @ rotation_about(axis, a, origin) for a in angles]
-            best = min(cands, key=lambda c: rot_angle_deg(c[:3, :3], T_ref[:3, :3]))
+            best = best @ _best_axis_rotation(best, T_ref, axis, origin)
         return best
 
     def equivalents(self, T: np.ndarray) -> list[np.ndarray]:
@@ -108,10 +106,18 @@ class Symmetry:
     def align_continuous(self, T: np.ndarray, T_ref: np.ndarray) -> np.ndarray:
         """Rotate T about the continuous symmetry axes to be as close as possible to T_ref."""
         for axis, origin in self.continuous:
-            angles = np.radians(np.arange(-180, 180, 0.5))
-            T = min((T @ rotation_about(axis, a, origin) for a in angles),
-                    key=lambda c: rot_angle_deg(c[:3, :3], T_ref[:3, :3]))
+            T = T @ _best_axis_rotation(T, T_ref, axis, origin)
         return T
+
+
+def _best_axis_rotation(T: np.ndarray, T_ref: np.ndarray, axis: np.ndarray, origin: np.ndarray) -> np.ndarray:
+    """4x4 rotation about (axis, origin) that brings T closest in rotation to T_ref (0.5 deg grid, vectorised)."""
+    ang = np.radians(np.arange(-180.0, 180.0, 0.5))
+    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    Ra = np.eye(3) + np.sin(ang)[:, None, None] * K + (1 - np.cos(ang))[:, None, None] * (K @ K)
+    tr = np.einsum("ji,jk,nki->n", T_ref[:3, :3], T[:3, :3], Ra)      # trace(R_ref^T R_T R_a)
+    k = int(np.argmax(tr))
+    return rotation_about(axis, ang[k], origin)
 
 
 def pose_error(T_est: np.ndarray, T_gt: np.ndarray, sym: Symmetry | None = None) -> tuple[float, float]:
@@ -141,8 +147,12 @@ def project(points: np.ndarray, K: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def voxel_downsample(points: np.ndarray, voxel: float) -> np.ndarray:
+    """One point per occupied voxel (first in input order)."""
     if voxel <= 0 or len(points) == 0:
         return points
-    keys = np.floor(points / voxel).astype(np.int64)
-    _, idx = np.unique(keys, axis=0, return_index=True)
+    ijk = np.floor(points / voxel).astype(np.int64)
+    ijk -= ijk.min(axis=0)
+    dims = ijk.max(axis=0) + 1
+    key = (ijk[:, 0] * dims[1] + ijk[:, 1]) * dims[2] + ijk[:, 2]
+    _, idx = np.unique(key, return_index=True)
     return points[idx]

@@ -50,3 +50,25 @@ snappose bop data/bop/itodd --split val --per-object 20 -s s4.inlier_tau_mm=2
 
 Parameter: `--prior-t/--prior-r` (Prior-Fehler), `--min-visib` (Mindest-Sichtbarkeit, Default 0,7), `--obj`, `--json`.
 Symmetrien kommen aus `models_info.json` (diskret + kontinuierlich), ADD-S wird für symmetrische Objekte verwendet.
+
+## Optimierungsrunde
+
+Gleiche Aufbauten wie oben; ITODD val (120 Versuche) ohne Zeitbudget gemessen, Vergleich vorher/nachher. Die Läufe mit Zeitbudget
+fanden teils unter hoher Hintergrundlast statt (eine andere App belegte ~6 Kerne), Laufzeiten sind daher pessimistisch.
+
+| Maßnahme | Ergebnis auf ITODD (≤2 mm / ≤5 mm / Median) | Urteil |
+|---|---|---|
+| Ausgangszustand (Zeitpunkt der ersten Validierung) | 42 % / 55 % / 2,1 mm | – |
+| **Prior-Fenster**: Refinement bleibt im Toleranzfenster (×1,25) | 42 % / 58 % / 1,7 mm | hilft leicht, verhindert Wegrutschen über 10 mm |
+| **`merge_vertices` im Onboarding** (BOP-Meshes hatten Vertices pro Face, daher nie „watertight“ → kein Rückseiten-Culling) | Voraussetzung für Kanten und Culling | Bugfix |
+| **Kantenterm** (CAD-Kanten ↔ Bildkanten, zusätzlicher Kandidat mit Arbitrierung) | 51 % / 73 % / 1,2 mm (ohne: 42 % / 59 % / 1,8 mm) | **größter Gewinn**, v. a. bei Unterlegscheiben und flachen Teilen |
+| Arbitrierung (Kantenkandidat nur, wenn Tiefenkonsistenz bleibt) | LM/TUD-L wieder wie vorher | nötig: ohne sie brach LM auf 9 % ≤5 mm ein (Textur, Clutter) |
+| Auto-Toleranz aus Tiefenstufe des Sensors | ITODD 2 mm, LM ~3 mm, TUD-L ~7 mm | ersetzt manuelles `s4.inlier_tau_mm`; Untergrenze 2 mm (1,5 mm war schlechter) |
+| Verifikationsschwellen neu kalibriert (Inlier ≥ 0,85, Explained ≥ 0,5, Margin ≥ 0) | OK-Präzision: ITODD 92 % (≤5 mm), LM/TUD-L 86 % (≤8 mm) | vorher fast nie `OK` |
+| Kein Effekt / schlechter | feineres Voxel (0,7–1 mm), mehr ICP-Iterationen (60), mehr Hypothesen (12), 6 Refine-Runden, Score-Gewicht 0,5 | im Rauschen oder schlechter; mehr Iterationen lassen flache Teile weiter wegrutschen |
+| Laufzeit | Voxel-Cache, vektorisierte Symmetrie-Rechnung: 590 → 360 ms pro Aufruf (ITODD-Beispiel) | |
+
+Endstand (Standardprofil `balanced`, mit Bild): ITODD ≤2 mm 56 %, ≤5 mm 76 %, Median 0,98 mm / 1,4°;
+LM ≤5 mm 49 %, Median 4,8 mm; TUD-L ≤5 mm 46 %, Median 4,8 mm (Rauschgrenze der Kinect-Daten).
+
+**Übrige ITODD-Ausfälle:** dunkle, kontrastarme Teile (z. B. hochkant stehende L-Profile) mit Tiefenlücken; dort meldet das Tool korrekt `NOK`.

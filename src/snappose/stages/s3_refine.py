@@ -62,7 +62,7 @@ def run(hyps: list[np.ndarray], scene: Scene, model: Model, cfg: Config, budget:
     refine = REFINERS.get(name, cfg.license_mode)
     pts = voxelize(scene, cfg.s3.coarse_voxel_mm)
     tau0 = auto_tau0(cfg)
-    tau_end = max(2.0 * cfg.s3.coarse_voxel_mm, cfg.s4.inlier_tau_mm)
+    tau_end = max(2.0 * cfg.s3.coarse_voxel_mm, scene.tau_mm)
     tau_end = min(tau_end, tau0)
     rounds = max(cfg.s3.refine_iters, 1)
     ratio = tau_end / tau0
@@ -86,7 +86,7 @@ def run(hyps: list[np.ndarray], scene: Scene, model: Model, cfg: Config, budget:
                 h.T = refine(h.T, pts, model, cfg, t0_r, t1_r, s3_deadline, window, edge=edge, f0=r / rounds, f1=(r + 1) / rounds)
             else:
                 h.T = refine(h.T, pts, model, cfg, t0_r, t1_r, s3_deadline, window)
-            h.score = s4_score.score_pose(h.T, scene.depth, scene.K, model, cfg.s4.inlier_tau_mm, pts,
+            h.score = s4_score.score_pose(h.T, scene.depth, scene.K, model, scene.tau_mm, pts,
                                            (edge[0], cfg.edges.score_weight) if edge is not None else None).score
         active.sort(key=lambda h: -h.score)
         # budget pressure forces pruning even for prune_schedule "none"

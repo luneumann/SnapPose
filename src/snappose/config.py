@@ -35,7 +35,7 @@ class S3:
 @dataclass
 class S4:
     scorer: str = "depth_residual"
-    inlier_tau_mm: float = 2.0
+    inlier_tau_mm: float | None = None   # None = estimate from the sensor's depth step size (clip 2..8 mm)
 
 
 @dataclass
@@ -66,15 +66,15 @@ class Prior:
 
 @dataclass
 class Verification:
-    min_inlier_ratio: float = 0.8
-    min_explained_ratio: float = 0.85
+    min_inlier_ratio: float = 0.85
+    min_explained_ratio: float = 0.5
     max_residual_mm: float = 1.5
-    min_score_margin: float = 0.05
+    min_score_margin: float = 0.0
 
 
 PROFILES: dict[str, dict] = {
     "fast": {
-        "time_budget_ms": 300,
+        "time_budget_ms": 400,
         "s0": {"input_scale": 0.5},
         "s2": {"n_perturbations": 1},
         "s3": {"refine_iters": 2, "prune_schedule": "halving", "coarse_voxel_mm": 4.0},
@@ -82,7 +82,7 @@ PROFILES: dict[str, dict] = {
         "s5": {"icp_iters": 15, "icp_voxel_mm": 2.5},
     },
     "balanced": {
-        "time_budget_ms": 800,
+        "time_budget_ms": 1200,
         "s0": {"input_scale": 0.75},
         "s2": {"n_perturbations": 5},
         "s3": {"refine_iters": 4, "prune_schedule": "halving", "coarse_voxel_mm": 3.0},
@@ -90,7 +90,7 @@ PROFILES: dict[str, dict] = {
         "s5": {"icp_iters": 30, "icp_voxel_mm": 1.5},
     },
     "precise": {
-        "time_budget_ms": 3000,
+        "time_budget_ms": 4000,
         "s0": {"input_scale": 1.0},
         "s2": {"n_perturbations": 15},
         "s3": {"refine_iters": 6, "prune_schedule": "none", "coarse_voxel_mm": 2.0},

@@ -6,7 +6,7 @@ from snappose.registry import REFINERS
 
 def test_profiles_and_overrides():
     c = Config.load(profile="fast")
-    assert c.s3.refine_iters == 2 and c.time_budget_ms == 300
+    assert c.s3.refine_iters == 2 and c.time_budget_ms == 400
     c = Config.load({"profile": "balanced", "overrides": {"s3": {"refine_iters": 3}}}, time_budget_ms=123)
     assert c.s3.refine_iters == 3 and c.time_budget_ms == 123
     assert c.s5.icp_iters == 30            # untouched profile value

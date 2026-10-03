@@ -12,8 +12,8 @@ Gedacht als schlanke Alternative bzw. Ergänzung zu klassischem Surface-Based Ma
 ```
 CAD ─ onboard ─► Punkte + Normalen (Cache)
 RGB-D + K + Prior-Pose
-   S0 Tiefenfilter/ROI → S2 Sobol-Hypothesen im Toleranzfenster → S3 Multi-Hypothesen-ICP + Successive Halving
-   → S5 Fein-ICP (Point-to-Plane, Tukey) → S4 Tiefen-Scoring → S6 Status OK / UNSICHER / NOK
+   S0 Tiefenfilter/ROI/Sensor-Toleranz → S2 Sobol-Hypothesen im Toleranzfenster → S3 Multi-Hypothesen-ICP + Successive Halving
+   → S5 Fein-ICP (Point-to-Plane, Tukey) → [mit Bild: zweiter Kandidat mit CAD-Kanten ↔ Bildkanten] → S4 Scoring → S6 Status OK / UNSICHER / NOK
 ```
 
 ## Schnellstart
@@ -21,7 +21,7 @@ RGB-D + K + Prior-Pose
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                    # 21 Tests, ohne Kamera/GPU
+pytest                    # 25 Tests, ohne Kamera/GPU
 snappose demo             # synthetisches Teil, Ergebnis + Overlay in out/demo_overlay.png
 snappose bench -n 30      # Profile gegeneinander messen
 ```
@@ -47,7 +47,7 @@ from snappose import PoseMatcher
 
 matcher = PoseMatcher(config="configs/balanced.yaml")      # oder profile="fast"
 matcher.onboard("teil_4711", "teil.stl")                   # gecached unter objects/
-res = matcher.match("teil_4711", depth_mm, K, prior=T_prior,
+res = matcher.match("teil_4711", depth_mm, K, prior=T_prior, rgb=image,   # rgb optional (Kantenterm)
                     overrides={"s3": {"refine_iters": 3}}, time_budget_ms=400)
 res.status, res.T_cam_obj, res.confidence, res.timing_ms   # res.to_dict() = JSON-Format siehe `MatchResult.to_dict()`
 ```
@@ -82,10 +82,16 @@ Reproduktion: [docs/VALIDATION.md](docs/VALIDATION.md).
 Auf Kinect-Daten ist die Tiefe selbst auf GT-Pose um 2–6 mm vom CAD abweichend; Genauigkeit unter ~5 mm lässt
 sich dort nicht belegen. Auf ITODD funktioniert das Tool bei guter Tiefe, scheitert aber bei einem Teil der Objekte.
 
+## Was die Optimierungsrunde gebracht hat
+
+Details in [docs/VALIDATION.md](docs/VALIDATION.md#optimierungsrunde). Kurz: Auf ITODD (gute Tiefe) stieg der Anteil ≤ 2 mm von
+42 % auf 56 %, ≤ 5 mm von 55 % auf 76 %, Median-Fehler von 2,1 auf 1,0 mm. Hauptgewinn: Kantenterm für flache/dünne Teile
+und Prior-Fenster. Auf Kinect-Daten (LM, TUD-L) ändert sich an der Genauigkeit nichts, die Rauschgrenze (~5 mm) dominiert.
+
 ## Grenzen (ehrlich)
 
-- **Nur Tiefe:** RGB wird in V1 nicht genutzt. Bei glatten Flächen ist die Lage *in der Fläche* nur schwach
-  bestimmt; Fehler im Bereich des Inlier-Toleranzbands (`s4.inlier_tau_mm`, 2 mm) werden vom Scoring nicht
+- **Tiefe dominiert:** Das Bild (RGB/Grau) wird nur für CAD-Kanten ↔ Bildkanten genutzt (optional, `rgb=`). Ohne Bild ist die Lage
+  *in der Fläche* bei glatten/dünnen Teilen nur schwach bestimmt; Fehler im Bereich des Inlier-Toleranzbands (`s4.inlier_tau_mm`, 2 mm) werden vom Scoring nicht
   erkannt. Gröbere Fehler (> 5 mm) erkennt die Verifikation zuverlässig als `UNSICHER`/`NOK`, aber
   im `fast`-Profil gingen im Benchmark einzelne 3–6°-Fehler noch als `OK` durch.
 - **Verifikationsschwellen** (`verification.*`) sind Startwerte und müssen pro Objekt/Sensor kalibriert werden.
