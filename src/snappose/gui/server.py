@@ -139,7 +139,12 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     Handler.engine = Engine(a.store, a.bop)
     Handler.port = a.port
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    except OSError:
+        print(f"Port {a.port} ist belegt – läuft SnapPose schon? Dann einfach http://127.0.0.1:{a.port} öffnen, "
+              f"sonst anderen Port wählen: snappose gui --port {a.port + 1}")
+        return 1
     srv.daemon_threads = True
     url = f"http://127.0.0.1:{a.port}"
     print(f"SnapPose läuft auf {url}  (Strg+C beendet)")
