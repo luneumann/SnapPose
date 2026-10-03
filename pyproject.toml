@@ -17,9 +17,13 @@ realsense = ["pyrealsense2"]
 
 [project.scripts]
 snappose = "snappose.cli:main"
+snappose-gui = "snappose.gui.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"snappose.gui" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

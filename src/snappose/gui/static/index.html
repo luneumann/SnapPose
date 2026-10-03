@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapPose</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b6fe0'/%3E%3Cpath d='M16 6l9 5v10l-9 5-9-5V11z' fill='none' stroke='white' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M7 11l9 5 9-5M16 16v10' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round' opacity='.6'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --surface-2: #eceff4; --text: #1a2230; --muted: #5d6877;
+  --border: #dce0e8; --accent: #3b6fe0; --accent-hover: #2f5bc0; --on-accent: #ffffff;
+  --ok: #2f8a6b; --warn: #b7791f; --bad: #c0392b; --idle: #6b7686; --stage: #0c1016;
+  --focus: #3b6fe0; --shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  --c-prior: rgb(255,150,30); --c-result: rgb(60,230,120); --c-gt: rgb(90,170,255); --c-edges: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1218; --surface: #171b23; --surface-2: #1f2430; --text: #e8ecf2; --muted: #98a3b3;
+    --border: #2b3240; --accent: #6d9bff; --accent-hover: #93b4ff; --on-accent: #0b1330;
+    --ok: #6cc4a1; --warn: #f0b84a; --bad: #f27d72; --idle: #98a3b3; --stage: #06080c;
+    --focus: #93b4ff; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+body { display: flex; flex-direction: column; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+header { display: flex; align-items: center; gap: 14px; padding: 10px 20px; flex: none; background: var(--surface); border-bottom: 1px solid var(--border); }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+.logo svg { width: 20px; height: 20px; stroke: var(--on-accent); }
+header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+header h1 small { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 8px; }
+@media (max-width: 760px) { header h1 small { display: none; } }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-weight: 600; font-size: 14px; }
+.pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); }
+.pill[data-s="OK"] .dot { background: var(--ok); } .pill[data-s="UNSICHER"] .dot { background: var(--warn); }
+.pill[data-s="NOK"] .dot { background: var(--bad); } .pill[data-s="BUSY"] .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .pill .dot { animation: none !important; } }
+
+main { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; padding: 14px 18px 16px; flex: 1; min-height: 0; }
+.live { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: auto; }
+@media (max-width: 1000px) { html, body { height: auto; } body { display: block; } main { display: block; padding: 14px 16px 40px; } .live { margin-top: 14px; overflow: visible; } .stage { aspect-ratio: 4 / 3; } .steps { overflow: visible; } }
+
+.banner { padding: 10px 14px; border-radius: 10px; font-size: 14px; border: 1px solid var(--bad); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, var(--surface)); }
+.stage { position: relative; flex: 1 0 380px; min-height: 380px; background: var(--stage); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: #aab6c2; }
+.placeholder .big { font-size: 18px; font-weight: 600; color: #e6edf3; margin-bottom: 6px; }
+.placeholder svg { width: 44px; height: 44px; stroke: #6b7c8c; margin-bottom: 10px; }
+.busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6,8,12,.55); color: #e6edf3; font-weight: 600; }
+.busy .ring { width: 54px; height: 54px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin 1s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.chip { position: absolute; left: 12px; bottom: 12px; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; background: rgba(8,12,16,.78); color: #fff; backdrop-filter: blur(4px); }
+.bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; flex: none; }
+.legend { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.legend label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.legend .sw { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1px solid #0003; }
+.legend input { accent-color: var(--accent); }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; flex: none; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 7px 12px; box-shadow: var(--shadow); }
+.tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.tile .v { font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.tile .goal { font-size: 12px; color: var(--muted); }
+.tile.ok .v { color: var(--ok); } .tile.warn .v { color: var(--warn); } .tile.bad .v { color: var(--bad); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); flex: none; }
+.card h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--text); }
+.tbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--surface-2); }
+.tbar i { display: block; height: 100%; }
+.tleg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tleg b { color: var(--text); font-weight: 600; } .tleg .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; }
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: 14px; }
+dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--border); } th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+
+aside { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.steps { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: auto; }
+.step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); flex: none; }
+.step.open { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.step-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; border: 0; background: transparent; cursor: pointer; text-align: left; border-radius: 12px; }
+.step-h:hover { background: var(--surface-2); }
+.step-h .t { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .6px; }
+.step-h .sum { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-h .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; flex: none; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 650; }
+.step.open .step-h .n { background: var(--accent); color: var(--on-accent); }
+.step-h .chev { width: 16px; height: 16px; flex: none; stroke: var(--muted); transition: transform .15s; }
+.step.open .step-h .chev { transform: rotate(180deg); }
+.step-b { display: none; padding: 2px 16px 16px; }
+.step.open .step-b { display: block; }
+.actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; flex: none; }
+.row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; } .row + .row, .row + .note, .seg + .row, .seg + .note, .note + .row, .gallery + .row { margin-top: 10px; }
+.note { font-size: 13px; color: var(--muted); margin: 0; } .note.bad { color: var(--bad); }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; } .field label { font-size: 12px; color: var(--muted); }
+.field input[type=text], .field input[type=number], select { height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); width: 100%; }
+.field input[type=file] { font-size: 13px; max-width: 100%; }
+.row .field { flex: 1 1 110px; }
+.btn { height: 42px; padding: 0 16px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn:hover:not(:disabled) { background: var(--surface-2); } .btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.block { width: 100%; height: 48px; font-size: 16px; } .btn.small { height: 34px; padding: 0 12px; font-size: 14px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { height: 36px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.obj { position: relative; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 8px 10px; cursor: pointer; text-align: left; }
+.obj[aria-checked="true"] { border-color: var(--accent); }
+.obj b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; } .obj small { color: var(--muted); font-size: 12px; }
+.obj .del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(8,12,16,.7); color: #fff; cursor: pointer; display: none; line-height: 1; }
+.obj:hover .del, .obj:focus-within .del { display: block; }
+.switch { display: flex; align-items: center; gap: 12px; cursor: pointer; margin-top: 12px; } .switch input { position: absolute; opacity: 0; }
+.switch .track { width: 42px; height: 24px; border-radius: 999px; background: var(--border); position: relative; flex: none; transition: background .15s; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch input:checked + .track { background: var(--accent); } .switch input:checked + .track::after { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 2px; }
+.switch .lbl b { display: block; font-weight: 600; } .switch .lbl span { font-size: 13px; color: var(--muted); }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; margin-top: 12px; }
+.slider label { font-size: 14px; font-weight: 600; } .slider output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+a { color: var(--accent); }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none; background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px; font-weight: 600; transition: all .2s; z-index: 20; max-width: 90vw; }
+#toast.show { opacity: 1; transform: translateX(-50%); } #toast.err { background: var(--bad); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M16 6l9 5v10l-9 5-9-5V11z"/><path d="M7 11l9 5 9-5M16 16v10" opacity=".7"/></svg></div>
+  <h1>SnapPose <small>6D-Lage eines CAD-Objekts aus einem RGB-D-Bild</small></h1>
+  <div class="spacer"></div>
+  <div class="pill" id="pill" data-s="IDLE" role="status" aria-live="polite"><span class="dot"></span><span id="pillLabel">Bereit</span></div>
+</header>
+
+<main>
+<aside aria-label="Ablauf">
+  <div class="steps">
+    <section class="step open" id="st1">
+      <button class="step-h" aria-expanded="true"><span class="n">1</span><span class="t">Objekt</span><span class="sum" id="sum1"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="step-b">
+        <div class="gallery" id="objGallery" role="radiogroup" aria-label="Objekte"></div>
+        <div class="row"><button class="btn small primary" id="btnNewObj">Neues Objekt einlernen</button></div>
+        <div id="newObj" hidden>
+          <div class="row"><div class="field"><label for="noName">Name</label><input type="text" id="noName" maxlength="40" autocomplete="off" spellcheck="false" placeholder="z. B. teil_4711"></div>
+            <div class="field"><label for="noUnit">Einheit des CAD</label><select id="noUnit"><option value="1">Millimeter</option><option value="10">Zentimeter</option><option value="1000">Meter</option><option value="25.4">Zoll</option></select></div></div>
+          <div class="row"><div class="field"><label for="noFile">CAD-Datei (STL, PLY, OBJ)</label><input type="file" id="noFile" accept=".stl,.ply,.obj"></div></div>
+          <div class="row"><button class="btn small primary" id="btnOnboard">Einlernen</button><button class="btn small" id="btnOnboardCancel">Abbrechen</button></div>
+          <p class="note" style="margin-top:8px">Nur das CAD-Modell wird gebraucht, kein Training. STEP vorher z. B. mit FreeCAD zu STL konvertieren. Symmetrien: siehe README (<code>--symmetry</code>).</p>
+        </div>
+      </div>
+    </section>
+    <section class="step" id="st2">
+      <button class="step-h" aria-expanded="false"><span class="n">2</span><span class="t">Aufnahme</span><span class="sum" id="sum2"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="step-b">
+        <div class="seg" role="radiogroup" aria-label="Quelle" id="segSrc">
+          <button role="radio" data-v="demo">Demo</button><button role="radio" data-v="bop">Datensatz</button><button role="radio" data-v="files">Dateien</button>
+        </div>
+        <div id="srcDemo"><p class="note" style="margin-top:10px">Synthetisches Teil mit simuliertem Sensorrauschen – läuft ohne Kamera und CAD.</p>
+          <div class="row"><button class="btn small primary" id="btnDemo">Neue Demo-Aufnahme</button></div></div>
+        <div id="srcBop" hidden>
+          <div class="row"><div class="field"><label for="bopSet">BOP-Datensatz</label><select id="bopSet"></select></div>
+            <div class="field"><label for="bopObj">Objekt</label><select id="bopObj"></select></div></div>
+          <div class="row"><button class="btn small primary" id="btnBop">Zufälliges Beispiel laden</button></div>
+          <p class="note" id="noBop" style="margin-top:8px" hidden>Kein Datensatz gefunden. <code>bash tools/fetch_bop.sh</code> lädt LM und TUD-L nach <code>data/bop</code>.</p>
+          <p class="note" style="margin-top:8px">Echte Aufnahme mit bekannter Soll-Lage: die Startlage wird daraus mit Zufallsfehler erzeugt.</p>
+        </div>
+        <div id="srcFiles" hidden>
+          <div class="row"><div class="field"><label for="fDepth">Tiefenbild (PNG/TIF, 16 Bit)</label><input type="file" id="fDepth" accept=".png,.tif,.tiff"></div></div>
+          <div class="row"><div class="field"><label for="fColor">Farb-/Graubild (optional, für Kanten)</label><input type="file" id="fColor" accept="image/*,.tif,.tiff"></div></div>
+          <div class="row"><div class="field"><label for="kfx">fx</label><input type="number" id="kfx" value="600" step="any"></div><div class="field"><label for="kfy">fy</label><input type="number" id="kfy" value="600" step="any"></div>
+            <div class="field"><label for="kcx">cx</label><input type="number" id="kcx" value="320" step="any"></div><div class="field"><label for="kcy">cy</label><input type="number" id="kcy" value="240" step="any"></div></div>
+          <div class="row"><div class="field"><label for="kds">Tiefe: Einheit → mm</label><input type="number" id="kds" value="1" step="any"></div></div>
+          <div class="row"><button class="btn small primary" id="btnFiles">Aufnahme laden</button></div>
+        </div>
+      </div>
+    </section>
+    <section class="step" id="st3">
+      <button class="step-h" aria-expanded="false"><span class="n">3</span><span class="t">Startlage</span><span class="sum" id="sum3"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="step-b">
+        <div id="priorGt" hidden>
+          <p class="note" style="margin-top:6px">Die Startlage ist die bekannte Soll-Lage plus Zufallsfehler. Das Tool bekommt nur Tiefe, Kamera und diese Startlage.</p>
+          <div class="slider"><label for="slPt">Fehler Position</label><output id="oPt"></output><input type="range" id="slPt" min="0" max="20" step="0.5"></div>
+          <div class="slider"><label for="slPr">Fehler Drehung</label><output id="oPr"></output><input type="range" id="slPr" min="0" max="10" step="0.5"></div>
+          <div class="row" style="margin-top:12px"><button class="btn small" id="btnReroll">Neu würfeln</button></div>
+        </div>
+        <div id="priorManual" hidden>
+          <p class="note" style="margin-top:6px">Grob bekannte Lage des Objekts im Kamerasystem (mm, Grad; Euler xyz).</p>
+          <div class="row"><div class="field"><label for="px">x</label><input type="number" id="px" step="any" value="0"></div><div class="field"><label for="py">y</label><input type="number" id="py" step="any" value="0"></div><div class="field"><label for="pz">z</label><input type="number" id="pz" step="any" value="500"></div></div>
+          <div class="row"><div class="field"><label for="prx">rx</label><input type="number" id="prx" step="any" value="180"></div><div class="field"><label for="pry">ry</label><input type="number" id="pry" step="any" value="0"></div><div class="field"><label for="prz">rz</label><input type="number" id="prz" step="any" value="0"></div></div>
+          <div class="row"><button class="btn small primary" id="btnPrior">Übernehmen</button><button class="btn small" id="btnGuess" title="Mitte des nächsten Objekts im Tiefenbild; Drehung musst du anpassen">Aus Tiefenbild schätzen</button></div>
+        </div>
+        <p class="note" id="priorNone" style="margin-top:6px">Zuerst eine Aufnahme laden.</p>
+      </div>
+    </section>
+    <section class="step" id="st4">
+      <button class="step-h" aria-expanded="false"><span class="n">4</span><span class="t">Zeit &amp; Genauigkeit</span><span class="sum" id="sum4"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="step-b">
+        <div class="field" style="margin-top:6px"><label for="selProfile">Profil</label>
+          <select id="selProfile"><option value="fast">Schnell</option><option value="balanced">Ausgewogen</option><option value="precise">Genau</option></select></div>
+        <div class="row"><div class="field"><label for="inBudget">Zeitbudget (ms, leer = Profil)</label><input type="number" id="inBudget" min="0" step="50" placeholder="Profil"></div></div>
+        <div class="slider"><label for="slTt">Toleranzfenster Position</label><output id="oTt"></output><input type="range" id="slTt" min="1" max="50" step="1"></div>
+        <div class="slider"><label for="slTr">Toleranzfenster Drehung</label><output id="oTr"></output><input type="range" id="slTr" min="1" max="20" step="1"></div>
+        <label class="switch"><input type="checkbox" id="swEdges"><span class="track"></span><span class="lbl"><b>Bildkanten nutzen</b><span>Nur mit Farb-/Graubild; hilft bei flachen, dünnen Teilen</span></span></label>
+        <p class="note" style="margin-top:12px">Der Schnell-/Genau-Vergleich auf synthetischen Daten steht unten (Benchmark).</p>
+      </div>
+    </section>
+  </div>
+  <div class="actions"><button class="btn primary block" id="btnMatch">Lage bestimmen</button><button class="btn block" id="btnBench" title="Vergleicht die Profile auf synthetischen Teilen">Benchmark</button></div>
+</aside>
+
+<section class="live" aria-label="Ergebnis">
+  <div class="banner" id="err" hidden role="alert"></div>
+  <div class="stage" id="stage">
+    <img id="img" alt="Aufnahme mit eingeblendetem CAD-Modell" hidden>
+    <div class="placeholder" id="ph"><div>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10" opacity=".6"/></svg>
+      <div class="big" id="phTitle">Noch keine Aufnahme</div><div id="phText">Objekt wählen, Aufnahme laden, dann „Lage bestimmen“.</div></div></div>
+    <div class="busy" id="busy" hidden><div><div class="ring"></div><span id="busyText">Rechnet …</span></div></div>
+    <div class="chip" id="chip" hidden></div>
+  </div>
+  <div class="bar">
+    <div class="seg" id="segView" role="radiogroup" aria-label="Ansicht" style="min-width:170px"><button role="radio" data-v="rgb">Bild</button><button role="radio" data-v="depth">Tiefe</button></div>
+    <div class="legend" id="legend">
+      <label><input type="checkbox" data-l="prior"><span class="sw" style="background:var(--c-prior)"></span>Startlage</label>
+      <label><input type="checkbox" data-l="result"><span class="sw" style="background:var(--c-result)"></span>Ergebnis</label>
+      <label id="lblGt"><input type="checkbox" data-l="gt"><span class="sw" style="background:var(--c-gt)"></span>Soll-Lage</label>
+      <label><input type="checkbox" data-l="edges"><span class="sw" style="background:var(--c-edges)"></span>CAD-Kanten</label>
+    </div>
+  </div>
+  <div class="metrics" id="metrics">
+    <div class="tile" id="tStatus"><div class="k">Status</div><div class="v" id="vStatus">–</div><div class="goal" id="gStatus">OK / UNSICHER / NOK</div></div>
+    <div class="tile"><div class="k">Konfidenz</div><div class="v" id="vConf">–</div><div class="goal">Bewertung der Lage</div></div>
+    <div class="tile" id="tTime"><div class="k">Rechenzeit</div><div class="v" id="vTime">–</div><div class="goal" id="gTime">&nbsp;</div></div>
+    <div class="tile" id="tGt"><div class="k">Fehler zur Soll-Lage</div><div class="v" id="vGt">–</div><div class="goal" id="gGt">vorher –</div></div>
+    <div class="tile"><div class="k">Tiefen-Treffer</div><div class="v" id="vInl">–</div><div class="goal" id="gInl">Toleranz –</div></div>
+    <div class="tile"><div class="k">Kanten-Treffer</div><div class="v" id="vEdge">–</div><div class="goal" id="gEdge">&nbsp;</div></div>
+  </div>
+  <div class="card" id="cardTime" hidden><h2>Zeit je Stufe</h2><div class="tbar" id="tbar"></div><div class="tleg" id="tleg"></div></div>
+  <div class="card" id="cardPose" hidden><h2>Ergebnis-Lage</h2>
+    <dl class="kv" id="poseKv"></dl>
+    <div class="row" style="margin-top:10px"><button class="btn small" id="btnCopy">JSON kopieren</button><a class="btn small" href="/api/result.json" download style="text-decoration:none;color:inherit">JSON herunterladen</a></div></div>
+  <div class="card" id="cardBench" hidden><h2>Benchmark (synthetisch)</h2><div id="benchBody"></div></div>
+</section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+let S = null, view = "rgb", src = "demo", layers = new Set(["prior", "result", "gt"]), imgKey = "";
+const STAGE_COL = { s0: "#7aa2f7", s2: "#bb9af7", s3: "#3b6fe0", s5: "#2f8a6b", s4: "#e0af68", s6: "#9aa5b1" };
+const STAGE_NAME = { s0: "Vorverarbeitung", s2: "Hypothesen", s3: "Verfeinerung", s5: "Fein-ICP/Kanten", s4: "Bewertung", s6: "Prüfung" };
+
+async function post(path, body, raw, ctype) {
+  const r = await fetch(path, { method: "POST", headers: { "X-Requested-With": "snappose", "Content-Type": ctype || "application/json" },
+    body: raw !== undefined ? raw : JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.statusText);
+  S = d; render(); return d;
+}
+const act = async (fn) => { try { await fn(); } catch (e) { toast(e.message, true); } };
+function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = "show" + (err ? " err" : ""); clearTimeout(toast.t); toast.t = setTimeout(() => (t.className = ""), err ? 5500 : 2600); }
+const f = (v, d = 1) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(d));
+
+/* accordion */
+$$(".step-h").forEach((b) => b.addEventListener("click", () => { const s = b.parentElement; const o = !s.classList.contains("open"); s.classList.toggle("open", o); b.setAttribute("aria-expanded", o); }));
+const openStep = (n) => $$(".step").forEach((s, i) => { const o = i === n - 1; s.classList.toggle("open", o); s.querySelector(".step-h").setAttribute("aria-expanded", o); });
+function seg(el, value) { $$(el + " button").forEach((b) => b.setAttribute("aria-checked", b.dataset.v === value)); }
+
+/* ---------- render ---------- */
+function render() {
+  if (!S) return;
+  const busy = S.busy, r = S.result, fr = S.frame, st = S.settings;
+  // header pill
+  const pill = $("#pill");
+  const key = busy ? "BUSY" : r ? r.status : "IDLE";
+  pill.dataset.s = key;
+  $("#pillLabel").textContent = busy ? (busy === "bench" ? "Benchmark läuft …" : "Rechnet …") : r ? ({ OK: "Lage gefunden (OK)", UNSICHER: "Unsicher", NOK: "Nicht gefunden (NOK)" }[r.status]) : "Bereit";
+  $("#err").hidden = !S.error; $("#err").textContent = S.error || "";
+  $("#busy").hidden = !busy; $("#busyText").textContent = busy === "bench" ? "Benchmark läuft … (ca. 20–60 s)" : "Rechnet …";
+
+  // objects
+  const og = $("#objGallery"); og.innerHTML = "";
+  S.objects.forEach((o) => {
+    const b = document.createElement("div"); b.className = "obj"; b.tabIndex = 0; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", o.id === S.object);
+    const ex = o.extents ? o.extents.map((v) => Math.round(v)).join("×") + " mm" : "";
+    b.innerHTML = `<b></b><small></small>`; b.querySelector("b").textContent = o.label; b.querySelector("small").textContent = ex;
+    if (!o.demo) { const d = document.createElement("button"); d.className = "del"; d.textContent = "×"; d.title = "Objekt löschen"; d.setAttribute("aria-label", "Objekt " + o.label + " löschen");
+      d.addEventListener("click", (e) => { e.stopPropagation(); if (confirm("Objekt „" + o.label + "“ löschen?")) act(() => post("/api/object/delete", { id: o.id })); }); b.appendChild(d); }
+    const pick = () => act(() => post("/api/object/select", { id: o.id }));
+    b.addEventListener("click", pick); b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+    og.appendChild(b);
+  });
+  const cur = S.objects.find((o) => o.id === S.object);
+  $("#sum1").textContent = cur ? cur.label : (S.object || "nicht gewählt");
+  $("#sum2").textContent = fr ? fr.label : "–";
+
+  // source panels
+  seg("#segSrc", src);
+  $("#srcDemo").hidden = src !== "demo"; $("#srcBop").hidden = src !== "bop"; $("#srcFiles").hidden = src !== "files";
+  const bs = $("#bopSet"); if (bs.options.length !== S.bop.length) { bs.innerHTML = S.bop.map((d) => `<option value="${d.id}">${d.id.toUpperCase()} (${d.split})</option>`).join(""); loadBopObjs(); }
+  $("#noBop").hidden = S.bop.length > 0; $("#btnBop").disabled = S.bop.length === 0;
+
+  // prior
+  const hasPrior = !!S.prior;
+  $("#priorGt").hidden = !(fr && fr.has_gt); $("#priorManual").hidden = !(fr && !fr.has_gt); $("#priorNone").hidden = !!fr;
+  if (document.activeElement !== $("#slPt")) { $("#slPt").value = st.prior_err_t; } $("#oPt").textContent = f(st.prior_err_t, 1) + " mm";
+  if (document.activeElement !== $("#slPr")) { $("#slPr").value = st.prior_err_r; } $("#oPr").textContent = f(st.prior_err_r, 1) + "°";
+  if (S.prior && fr && !fr.has_gt) { const a = [["px", S.prior.t[0]], ["py", S.prior.t[1]], ["pz", S.prior.t[2]], ["prx", S.prior.euler_deg[0]], ["pry", S.prior.euler_deg[1]], ["prz", S.prior.euler_deg[2]]];
+    a.forEach(([id, v]) => { if (document.activeElement !== $("#" + id) && !$("#" + id).dataset.dirty) $("#" + id).value = v; }); }
+  $("#sum3").textContent = hasPrior ? `z ${f(S.prior.t[2], 0)} mm` : "–";
+
+  // settings
+  if (document.activeElement !== $("#selProfile")) $("#selProfile").value = st.profile;
+  if (document.activeElement !== $("#inBudget")) $("#inBudget").value = st.time_budget_ms || "";
+  $("#inBudget").placeholder = "Profil: " + S.profile_budget_ms[st.profile] + " ms";
+  if (document.activeElement !== $("#slTt")) $("#slTt").value = st.tol_t_mm; $("#oTt").textContent = "±" + f(st.tol_t_mm, 0) + " mm";
+  if (document.activeElement !== $("#slTr")) $("#slTr").value = st.tol_r_deg; $("#oTr").textContent = "±" + f(st.tol_r_deg, 0) + "°";
+  $("#swEdges").checked = st.edges;
+  $("#sum4").textContent = ({ fast: "Schnell", balanced: "Ausgewogen", precise: "Genau" })[st.profile] + " · " + (st.time_budget_ms || S.profile_budget_ms[st.profile]) + " ms";
+
+  // buttons
+  $("#btnMatch").disabled = !!busy || !S.object || !fr || !hasPrior; $("#btnBench").disabled = !!busy;
+  $("#btnMatch").textContent = busy === "match" ? "Rechnet …" : "Lage bestimmen";
+
+  // stage image
+  const showImg = !!fr; $("#img").hidden = !showImg; $("#ph").hidden = showImg;
+  $("#lblGt").hidden = !(fr && fr.has_gt); $$("#legend input").forEach((i) => (i.checked = layers.has(i.dataset.l)));
+  seg("#segView", view); $$("#segView button")[0].disabled = false;
+  if (showImg) {
+    const k = [fr.label, view, [...layers].sort().join(","), S.prior ? S.prior.t.join(",") + S.prior.euler_deg.join(",") : "", r ? r.timing_ms.total : "", S.object].join("|");
+    if (k !== imgKey) { imgKey = k; $("#img").src = "/api/image.jpg?view=" + view + "&layers=" + [...layers].join(",") + "&k=" + encodeURIComponent(k); }
+    $("#chip").hidden = false; $("#chip").textContent = fr.label + (fr.has_rgb ? "" : " · ohne Farbbild") + " · " + fr.size.join("×");
+    if (!fr.has_rgb && view === "rgb") { /* server falls back to depth colours */ }
+  } else $("#chip").hidden = true;
+
+  // tiles
+  const tile = (id, cls) => { const t = $(id); t.classList.remove("ok", "warn", "bad"); if (cls) t.classList.add(cls); };
+  if (r) {
+    $("#vStatus").textContent = r.status; tile("#tStatus", { OK: "ok", UNSICHER: "warn", NOK: "bad" }[r.status]);
+    $("#gStatus").textContent = r.budget_exhausted ? "Zeitbudget erschöpft" : (r.metrics.edges_used ? "mit Bildkanten" : "nur Tiefe");
+    $("#vConf").textContent = f(r.confidence * 100, 0) + " %";
+    $("#vTime").innerHTML = f(r.timing_ms.total, 0) + " <small>ms</small>"; $("#gTime").textContent = "Budget " + (st.time_budget_ms || S.profile_budget_ms[r.profile]) + " ms";
+    tile("#tTime", r.budget_exhausted ? "warn" : "");
+    if (r.error_vs_gt) { $("#vGt").innerHTML = f(r.error_vs_gt.t_mm, 2) + " <small>mm</small> · " + f(r.error_vs_gt.r_deg, 2) + " <small>°</small>"; $("#gGt").textContent = "vorher " + f(r.prior_error_vs_gt.t_mm, 1) + " mm · " + f(r.prior_error_vs_gt.r_deg, 1) + "°";
+      tile("#tGt", r.error_vs_gt.t_mm <= 2 && r.error_vs_gt.r_deg <= 2 ? "ok" : r.error_vs_gt.t_mm > 5 ? "bad" : "warn"); }
+    else { $("#vGt").textContent = "–"; $("#gGt").textContent = "keine Soll-Lage bekannt"; tile("#tGt", ""); }
+    $("#vInl").textContent = f(r.metrics.inlier_ratio * 100, 0) + " %"; $("#gInl").textContent = "Toleranz " + f(r.metrics.tau_mm, 1) + " mm · Rest " + f(r.metrics.residual_mm, 2) + " mm";
+    $("#vEdge").textContent = r.metrics.edge_ratio >= 0 ? f(r.metrics.edge_ratio * 100, 0) + " %" : "–"; $("#gEdge").textContent = r.metrics.edge_ratio >= 0 ? (r.metrics.edges_used ? "Kantenlösung gewählt" : "Tiefenlösung gewählt") : "kein Bild";
+    // timing card
+    const T = r.timing_ms, keys = ["s0", "s2", "s3", "s5", "s4", "s6"], tot = keys.reduce((a, k) => a + (T[k] || 0), 0) || 1;
+    $("#tbar").innerHTML = keys.map((k) => `<i title="${STAGE_NAME[k]}" style="width:${(T[k] || 0) / tot * 100}%;background:${STAGE_COL[k]}"></i>`).join("");
+    $("#tleg").innerHTML = keys.map((k) => `<span><span class="sw" style="background:${STAGE_COL[k]}"></span>${STAGE_NAME[k]} <b>${f(T[k], 0)} ms</b></span>`).join("");
+    $("#cardTime").hidden = false;
+    const q = r.quaternion_xyzw; $("#poseKv").innerHTML = `<dt>Translation (mm)</dt><dd>${r.translation_mm.map((v) => f(v, 2)).join(" · ")}</dd><dt>Quaternion (x y z w)</dt><dd>${q.map((v) => f(v, 4)).join(" · ")}</dd><dt>Profil / Modus</dt><dd>${r.profile} / ${r.mode}</dd><dt>Streuung zu Alternativen</dt><dd>${f(r.metrics.score_margin, 2)}</dd>`;
+    $("#cardPose").hidden = false;
+  } else {
+    ["#vStatus", "#vConf", "#vTime", "#vGt", "#vInl", "#vEdge"].forEach((i) => ($(i).textContent = "–")); ["#tStatus", "#tTime", "#tGt"].forEach((i) => tile(i, ""));
+    $("#cardTime").hidden = true; $("#cardPose").hidden = true;
+    $("#gStatus").textContent = "OK / UNSICHER / NOK"; $("#gTime").textContent = "Budget " + (st.time_budget_ms || S.profile_budget_ms[st.profile]) + " ms";
+    $("#gGt").textContent = fr && fr.has_gt ? "Soll-Lage bekannt" : "–"; $("#gInl").textContent = "Toleranz –"; $("#gEdge").textContent = fr && fr.has_rgb ? "Bild vorhanden" : "kein Bild";
+  }
+  // bench
+  if (S.bench) {
+    const rows = Object.entries(S.bench).map(([p, b]) => `<tr><td>${p}</td><td>${f(b.success["1mm/1deg"] * 100, 0)} %</td><td>${f(b.success["2mm/2deg"] * 100, 0)} %</td><td>${f(b.success["5mm/5deg"] * 100, 0)} %</td><td>${f(b.t_err_mm.median, 2)} mm</td><td>${f(b.time_ms.mean, 0)} ms</td></tr>`).join("");
+    $("#benchBody").innerHTML = `<table><tr><th>Profil</th><th>≤1 mm/°</th><th>≤2 mm/°</th><th>≤5 mm/°</th><th>Median</th><th>Zeit Ø</th></tr>${rows}</table><p class="note" style="margin-top:8px">Synthetisches Teil, nur Tiefe, Startfehler bis 6 mm / 3°.</p>`;
+    $("#cardBench").hidden = false;
+  }
+  $("#ph").querySelector("#phTitle").textContent = S.object ? "Noch keine Aufnahme" : "Noch kein Objekt gewählt";
+}
+
+async function loadBopObjs() {
+  const id = $("#bopSet").value; if (!id) return;
+  const r = await fetch("/api/bop/" + id + "/objects").then((x) => x.json()).catch(() => ({ objects: [] }));
+  $("#bopObj").innerHTML = `<option value="">beliebig</option>` + r.objects.map((o) => `<option value="${o}">Objekt ${o}</option>`).join("");
+}
+
+/* ---------- events ---------- */
+$("#segSrc").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { src = b.dataset.v; render(); } });
+$("#segView").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { view = b.dataset.v; render(); } });
+$("#legend").addEventListener("change", (e) => { const l = e.target.dataset.l; if (e.target.checked) layers.add(l); else layers.delete(l); render(); });
+$("#bopSet").addEventListener("change", loadBopObjs);
+$("#btnNewObj").addEventListener("click", () => { $("#newObj").hidden = false; });
+$("#btnOnboardCancel").addEventListener("click", () => { $("#newObj").hidden = true; });
+$("#btnOnboard").addEventListener("click", () => act(async () => {
+  const file = $("#noFile").files[0], name = $("#noName").value.trim();
+  if (!file) throw new Error("CAD-Datei wählen");
+  const ext = file.name.split(".").pop();
+  $("#btnOnboard").disabled = true; toast("Lerne Objekt ein …");
+  try { await post(`/api/object/onboard?name=${encodeURIComponent(name)}&ext=${encodeURIComponent(ext)}&scale=${$("#noUnit").value}`, null, await file.arrayBuffer(), "application/octet-stream");
+    $("#newObj").hidden = true; toast("Objekt „" + name + "“ eingelernt"); openStep(2); } finally { $("#btnOnboard").disabled = false; }
+}));
+$("#btnDemo").addEventListener("click", () => act(async () => { await post("/api/frame/demo", {}); openStep(3); }));
+$("#btnBop").addEventListener("click", () => act(async () => { $("#btnBop").disabled = true; try { await post("/api/frame/bop", { dataset: $("#bopSet").value, obj: $("#bopObj").value }); openStep(3); } finally { $("#btnBop").disabled = false; } }));
+$("#btnFiles").addEventListener("click", () => act(async () => {
+  const d = $("#fDepth").files[0], c = $("#fColor").files[0]; if (!d) throw new Error("Tiefenbild wählen");
+  await post("/api/frame/upload?kind=depth", null, await d.arrayBuffer(), "application/octet-stream");
+  if (c) await post("/api/frame/upload?kind=color", null, await c.arrayBuffer(), "application/octet-stream");
+  await post("/api/frame/camera", { fx: $("#kfx").value, fy: $("#kfy").value, cx: $("#kcx").value, cy: $("#kcy").value, depth_scale: $("#kds").value });
+  openStep(3);
+}));
+$("#btnReroll").addEventListener("click", () => act(() => post("/api/prior/reroll")));
+$$("#priorManual input").forEach((i) => i.addEventListener("input", () => (i.dataset.dirty = "1")));
+$("#btnPrior").addEventListener("click", () => act(async () => { await post("/api/prior/set", { t: [$("#px").value, $("#py").value, $("#pz").value], euler_deg: [$("#prx").value, $("#pry").value, $("#prz").value] }); $$("#priorManual input").forEach((i) => delete i.dataset.dirty); }));
+$("#btnGuess").addEventListener("click", () => act(async () => { await post("/api/prior/guess"); $$("#priorManual input").forEach((i) => delete i.dataset.dirty); }));
+$("#btnMatch").addEventListener("click", () => act(() => post("/api/match")));
+$("#btnBench").addEventListener("click", () => act(() => post("/api/bench", { n: 20 })));
+$("#btnCopy").addEventListener("click", () => act(async () => { const t = await fetch("/api/result.json").then((r) => r.text()); await navigator.clipboard.writeText(t); toast("JSON kopiert"); }));
+const setting = (obj) => act(() => post("/api/settings", obj));
+$("#selProfile").addEventListener("change", (e) => setting({ profile: e.target.value }));
+$("#inBudget").addEventListener("change", (e) => setting({ time_budget_ms: e.target.value }));
+$("#swEdges").addEventListener("change", (e) => setting({ edges: e.target.checked }));
+[["#slTt", "tol_t_mm"], ["#slTr", "tol_r_deg"]].forEach(([id, k]) => $(id).addEventListener("change", (e) => setting({ [k]: e.target.value })));
+[["#slPt", "prior_err_t"], ["#slPr", "prior_err_r"]].forEach(([id, k]) => $(id).addEventListener("change", (e) => act(async () => { await post("/api/settings", { [k]: e.target.value }); await post("/api/prior/reroll"); })));
+["#slTt", "#slTr", "#slPt", "#slPr"].forEach((id) => $(id).addEventListener("input", (e) => { const o = { "#slTt": ["#oTt", "±", " mm"], "#slTr": ["#oTr", "±", "°"], "#slPt": ["#oPt", "", " mm"], "#slPr": ["#oPr", "", "°"] }[id]; $(o[0]).textContent = o[1] + e.target.value + o[2]; }));
+
+/* ---------- polling ---------- */
+let failures = 0;
+async function poll() {
+  try { const d = await fetch("/api/status").then((r) => r.json()); S = d; failures = 0; render(); }
+  catch (e) { if (++failures === 3) toast("Verbindung zum Programm getrennt – läuft es noch?", true); }
+  setTimeout(poll, S && S.busy ? 500 : 1500);
+}
+poll();
+</script>
+</body>
+</html>

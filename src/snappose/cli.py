@@ -135,6 +135,11 @@ def cmd_bop(args) -> int:
     return 0
 
 
+def cmd_gui(args) -> int:
+    from .gui.server import main as gui_main
+    return gui_main(["--port", str(args.port), "--store", args.store, "--bop", args.bop] + (["--no-browser"] if args.no_browser else []))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="snappose", description="Single-shot 6D pose matching from CAD + RGB-D")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -196,6 +201,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--json")
     p.set_defaults(fn=cmd_bop)
+
+    p = sub.add_parser("gui", help="web interface (local)")
+    p.add_argument("--port", type=int, default=8780)
+    p.add_argument("--store", default="objects")
+    p.add_argument("--bop", default="data/bop")
+    p.add_argument("--no-browser", action="store_true")
+    p.set_defaults(fn=cmd_gui)
 
     args = ap.parse_args(argv)
     return args.fn(args)

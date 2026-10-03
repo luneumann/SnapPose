@@ -16,12 +16,28 @@ RGB-D + K + Prior-Pose
    → S5 Fein-ICP (Point-to-Plane, Tukey) → [mit Bild: zweiter Kandidat mit CAD-Kanten ↔ Bildkanten] → S4 Scoring → S6 Status OK / UNSICHER / NOK
 ```
 
+## Oberfläche
+
+**Doppelklick auf `SnapPose starten.command`** (Mac; beim ersten Mal richtet es die Umgebung ein) oder:
+
+```bash
+source .venv/bin/activate && snappose gui        # öffnet http://127.0.0.1:8780
+```
+
+Ablauf in der Seitenleiste: **1 Objekt** (CAD hochladen und einlernen oder Demo-Teil) → **2 Aufnahme** (Demo, zufälliges Beispiel
+aus einem BOP-Datensatz oder eigene Tiefen-/Farbbild-Dateien mit Kamera-Intrinsik) → **3 Startlage** (bei Demo/BOP aus der
+bekannten Soll-Lage plus Zufallsfehler, bei eigenen Dateien manuell) → **4 Zeit & Genauigkeit** (Profil, Zeitbudget,
+Toleranzfenster, Bildkanten) → **Lage bestimmen**. Rechts: Aufnahme mit eingeblendetem CAD-Modell (Startlage orange,
+Ergebnis grün, Soll-Lage blau, optional CAD-Kanten), Status, Konfidenz, Fehler zur Soll-Lage, Zeit je Stufe und das
+Ergebnis als JSON. „Benchmark“ vergleicht die Profile auf synthetischen Teilen. Die Oberfläche läuft nur lokal
+(127.0.0.1) und prüft Host- und Header-Angaben wie bei Lockstep.
+
 ## Schnellstart
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                    # 25 Tests, ohne Kamera/GPU
+pytest                    # 30 Tests, ohne Kamera/GPU
 snappose demo             # synthetisches Teil, Ergebnis + Overlay in out/demo_overlay.png
 snappose bench -n 30      # Profile gegeneinander messen
 ```
@@ -116,7 +132,8 @@ FastAPI-Dienst.
 ## Struktur
 
 ```
-src/snappose/   api, config, onboarding, geometry, budget, registry, synth, viz, cli, bench
+src/snappose/   api, config, onboarding, geometry, budget, registry, synth, viz, cli, bench, eval_bop
+  gui/          server.py, engine.py, static/index.html (Weboberfläche)
   stages/       s0_preprocess, s2_hypotheses, s3_refine, s4_score, s5_icp, s6_verify
 configs/        fast|balanced|precise.yaml        tools/   capture_realsense.py
 tests/          pytest

@@ -30,6 +30,7 @@ RGB-D + K + Prior → S0 → S2 → S3 (Refine+Prune) → S5 (ICP) → S4 (Score
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest                                        # Tests, ohne Kamera/GPU
+snappose gui                                  # Weboberfläche (Doppelklick: SnapPose starten.command)
 snappose demo                                 # synthetischer End-to-End-Lauf + Overlay in out/
 snappose bench -n 30                          # Profile vergleichen (Erfolgsquote, Fehler, Zeit)
 snappose onboard --object teil --cad teil.stl [--scale 1000] [--symmetry sym.json]
@@ -41,3 +42,9 @@ snappose match --object teil --depth d.png --intrinsics k.json --prior prior.jso
 - Scoring/Verifikation sind das Sicherheitsnetz gegen falsche `OK`: nach Änderungen `snappose bench` laufen lassen
   und prüfen, dass grobe Fehler (> 5 mm) nicht als `OK` durchgehen
 - ICP verwirft Rückseiten-Korrespondenzen (`model.watertight`); ohne das rutscht dünne Geometrie 1 Plattendicke weg
+
+## GUI
+
+- `src/snappose/gui/`: stdlib-HTTP-Server (nur 127.0.0.1, Host- und `X-Requested-With: snappose`-Prüfung) + `engine.py` (Zustand,
+  Matching im Worker-Thread) + `static/index.html` (Stil wie ctrack/Lockstep). Handler rufen nur Engine-Methoden auf.
+- Neue Funktion = Engine-Methode + Route in `server.py` + Test in `tests/test_gui.py`

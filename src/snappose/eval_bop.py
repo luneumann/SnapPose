@@ -159,3 +159,57 @@ def format_report(res: dict) -> str:
             f"{'object':>8} {'n':>4}  {'1mm':>6} {'2mm':>6} {'5mm':>6}  {'ADD-S':>7}  prior(mm,deg) > result  OK/UNS/NOK  falseOK  t_ms  p95")
     rows = [line(f"obj {o}", a) for o, a in res["per_object"].items()]
     return "\n".join([head, *rows, line("ALL", res["overall"])])
+
+
+def read_image(sdir: Path, im: int):
+    """Colour (RGB) or grey image of a BOP frame, or None."""
+    for kind in ("rgb", "gray"):
+        for ext in ("png", "tif", "jpg"):
+            q = sdir / kind / f"{im:06d}.{ext}"
+            if q.exists():
+                img = cv2.imread(str(q), cv2.IMREAD_UNCHANGED)
+                if img is not None and img.ndim == 3:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                return img
+    return None
+
+
+def read_depth(sdir: Path, im: int, scale: float) -> np.ndarray:
+    for ext in ("png", "tif"):
+        q = sdir / "depth" / f"{im:06d}.{ext}"
+        if q.exists():
+            return cv2.imread(str(q), cv2.IMREAD_UNCHANGED).astype(np.float32) * scale
+    raise FileNotFoundError(f"no depth image {im} in {sdir}")
+
+
+def random_instance(dataset: str, obj_id: int | None, rng: np.random.Generator, split: str | None = None,
+                    min_visib: float = 0.7) -> dict:
+    """One random ground-truth instance of a BOP dataset: depth, image, K, T_gt, ids."""
+    base = Path(dataset)
+    split = split or ("test" if find_root_or_none(base, "test") else "val")
+    root = find_root(base, split)
+    scenes = [d for d in sorted((root / split).iterdir()) if d.is_dir()]
+    for _ in range(200):
+        sdir = scenes[int(rng.integers(len(scenes)))]
+        gts = json.loads((sdir / "scene_gt.json").read_text())
+        infos = json.loads((sdir / "scene_gt_info.json").read_text())
+        cams = json.loads((sdir / "scene_camera.json").read_text())
+        im = list(gts)[int(rng.integers(len(gts)))]
+        cand = [(i, g) for i, g in enumerate(gts[im])
+                if (obj_id is None or g["obj_id"] == obj_id) and infos[im][i].get("visib_fract", 1.0) >= min_visib]
+        if not cand:
+            continue
+        gi, g = cand[int(rng.integers(len(cand)))]
+        cam = cams[im]
+        R = Rotation.from_matrix(np.array(g["cam_R_m2c"]).reshape(3, 3)).as_matrix()
+        return {"depth": read_depth(sdir, int(im), cam.get("depth_scale", 1.0)), "rgb": read_image(sdir, int(im)),
+                "K": np.array(cam["cam_K"], float).reshape(3, 3), "T_gt": make_T(R, np.array(g["cam_t_m2c"])),
+                "obj_id": g["obj_id"], "scene": int(sdir.name), "im": int(im), "root": root}
+    raise LookupError("no matching instance found")
+
+
+def find_root_or_none(path: Path, split: str):
+    try:
+        return find_root(path, split)
+    except FileNotFoundError:
+        return None
