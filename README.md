@@ -6,8 +6,8 @@ Gedacht als schlanke Alternative bzw. Ergänzung zu klassischem Surface-Based Ma
 
 > **Status: V1 / Prototyp.** Es gibt den **Prior-Modus** („Lage grob bekannt“, z. B. Teil liegt in einer
 > Vorrichtung). Der globale Modus (Lage unbekannt), ein Netz-Refiner (MegaPose) und der Dienst-Endpunkt sind
-> geplant, siehe [Roadmap](#roadmap). Alle Messwerte unten stammen von **synthetischen** Daten, noch nicht
-> von echten Sensoren.
+> geplant, siehe [Roadmap](#roadmap). Die Messwerte der Profil-Tabelle stammen von **synthetischen** Daten; Ergebnisse
+> auf öffentlichen BOP-Datensätzen siehe [Validierung](#validierung-auf-bop-datensätzen-linemod-tud-l-itodd).
 
 ```
 CAD ─ onboard ─► Punkte + Normalen (Cache)
@@ -21,7 +21,7 @@ RGB-D + K + Prior-Pose
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                    # 20 Tests, ohne Kamera/GPU
+pytest                    # 21 Tests, ohne Kamera/GPU
 snappose demo             # synthetisches Teil, Ergebnis + Overlay in out/demo_overlay.png
 snappose bench -n 30      # Profile gegeneinander messen
 ```
@@ -68,6 +68,20 @@ Synthetischer Benchmark (`snappose bench -n 40`, Teil ~80×50×35 mm, Tiefenraus
 | balanced | 80 % | 100 % | 100 % | 0,65 mm / 0,07° | 39 / 45 ms |
 | precise | 88 % | 100 % | 100 % | 0,28 mm / 0,06° | 389 / 453 ms |
 
+## Validierung auf BOP-Datensätzen (LINEMOD, TUD-L, ITODD)
+
+`snappose bop <dataset>` testet den Prior-Modus auf BOP-Daten (GT-Pose + Zufallsfehler als Prior). Details und
+Reproduktion: [docs/VALIDATION.md](docs/VALIDATION.md).
+
+| Datensatz | Prior-Fehler (Median) | Ergebnis (Median) |
+|---|---|---|
+| ITODD val (Structured Light) | 6,0 mm / 2,9° | **2,1 mm / 1,6°** (viele Objekte 0,2–1 mm, einige scheitern) |
+| LINEMOD (Kinect) | 5,9 mm / 3,0° | 5,2 mm / 2,3° |
+| TUD-L (Kinect) | 5,9 mm / 2,9° | 3,9 mm / 2,0° |
+
+Auf Kinect-Daten ist die Tiefe selbst auf GT-Pose um 2–6 mm vom CAD abweichend; Genauigkeit unter ~5 mm lässt
+sich dort nicht belegen. Auf ITODD funktioniert das Tool bei guter Tiefe, scheitert aber bei einem Teil der Objekte.
+
 ## Grenzen (ehrlich)
 
 - **Nur Tiefe:** RGB wird in V1 nicht genutzt. Bei glatten Flächen ist die Lage *in der Fläche* nur schwach
@@ -78,7 +92,8 @@ Synthetischer Benchmark (`snappose bench -n 40`, Teil ~80×50×35 mm, Tiefenraus
 - **Rückseiten-Culling** setzt ein geschlossenes Mesh mit konsistenten Normalen voraus (sonst: kein Culling).
 - Das Objekt sollte freigestellt sein; Tischfläche direkt am Teil (< 10 mm) senkt den Scoring-Wert.
 - Symmetrien: nur manuell per `symmetries.json` (zyklisch/kontinuierlich), keine Auto-Erkennung.
-- Keine Messung auf echten Sensoren, keine GPU-Pfade; `tools/capture_realsense.py` ist ungetestet.
+- Keine Messung mit eigener Hardware, keine GPU-Pfade; `tools/capture_realsense.py` ist ungetestet.
+- Zeitbudget ist weich: Mindest-ICP-Iterationen und Scoring laufen immer, unter CPU-Last kann das Budget überschritten werden.
 
 Symmetrie-Datei:
 

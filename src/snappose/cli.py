@@ -124,6 +124,17 @@ def cmd_bench(args) -> int:
     return 0
 
 
+def cmd_bop(args) -> int:
+    from . import eval_bop
+    res = eval_bop.run(args.dataset, profile=args.profile or "balanced", per_object=args.per_object,
+                       prior_t=args.prior_t, prior_r=args.prior_r, obj_ids=args.obj, seed=args.seed,
+                       overrides=_parse_set(args.set), min_visib=args.min_visib, split=args.split)
+    print(eval_bop.format_report(res))
+    if args.json:
+        Path(args.json).write_text(json.dumps(res, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="snappose", description="Single-shot 6D pose matching from CAD + RGB-D")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -171,6 +182,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profiles", nargs="+", choices=sorted(PROFILES))
     p.add_argument("--json", help="write full results as JSON")
     p.set_defaults(fn=cmd_bench)
+
+    p = sub.add_parser("bop", help="evaluate on a BOP-format dataset (LM, TUD-L, ITODD, ...) with GT-perturbed priors")
+    common(p)
+    p.add_argument("dataset", help="directory with models/ and test/")
+    p.add_argument("--per-object", type=int, default=30)
+    p.add_argument("--obj", type=int, nargs="+", help="restrict to object ids")
+    p.add_argument("--prior-t", type=float, default=6.0)
+    p.add_argument("--prior-r", type=float, default=3.0)
+    p.add_argument("--split", default="test", help="test | val (ITODD ground truth is only public for val)")
+    p.add_argument("--min-visib", type=float, default=0.7)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--json")
+    p.set_defaults(fn=cmd_bop)
 
     args = ap.parse_args(argv)
     return args.fn(args)

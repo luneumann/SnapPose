@@ -79,6 +79,14 @@ class Symmetry:
                 raise ValueError(f"unknown symmetry type {it['type']!r}")
         return cls(discrete, continuous)
 
+    @classmethod
+    def from_bop(cls, info: dict) -> "Symmetry":
+        """From a BOP models_info.json entry (symmetries_discrete: flat 4x4, symmetries_continuous: axis+offset)."""
+        discrete = [np.eye(4)] + [np.array(m, float).reshape(4, 4) for m in info.get("symmetries_discrete", [])]
+        cont = [(np.array(c["axis"], float) / np.linalg.norm(c["axis"]), np.array(c.get("offset", [0, 0, 0]), float))
+                for c in info.get("symmetries_continuous", [])]
+        return cls(discrete, cont)
+
     def to_spec(self) -> list[dict]:
         # Only used for round-trips of continuous axes; discrete groups are stored via the source JSON.
         return [{"type": "continuous", "axis": a.tolist(), "origin": o.tolist()} for a, o in self.continuous]
@@ -97,10 +105,18 @@ class Symmetry:
     def equivalents(self, T: np.ndarray) -> list[np.ndarray]:
         return [T @ S for S in self.discrete]
 
+    def align_continuous(self, T: np.ndarray, T_ref: np.ndarray) -> np.ndarray:
+        """Rotate T about the continuous symmetry axes to be as close as possible to T_ref."""
+        for axis, origin in self.continuous:
+            angles = np.radians(np.arange(-180, 180, 0.5))
+            T = min((T @ rotation_about(axis, a, origin) for a in angles),
+                    key=lambda c: rot_angle_deg(c[:3, :3], T_ref[:3, :3]))
+        return T
+
 
 def pose_error(T_est: np.ndarray, T_gt: np.ndarray, sym: Symmetry | None = None) -> tuple[float, float]:
     """(translation error [mm], rotation error [deg]) minimised over discrete symmetries."""
-    cands = sym.equivalents(T_est) if sym else [T_est]
+    cands = [sym.align_continuous(c, T_gt) for c in sym.equivalents(T_est)] if sym else [T_est]
     errs = [(float(np.linalg.norm(c[:3, 3] - T_gt[:3, 3])), rot_angle_deg(c[:3, :3], T_gt[:3, :3])) for c in cands]
     return min(errs, key=lambda e: e[0] / 1.0 + e[1])
 

@@ -8,3 +8,4 @@ out/
 captures/
 *.npz
 docs/SPEC.md
+data/

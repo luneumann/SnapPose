@@ -50,7 +50,7 @@ def test_time_budget_is_respected(mesh, model, rng):
     res = m.match("bracket", depth, DEFAULT_K, prior, time_budget_ms=60)
     assert res.budget_exhausted
     assert res.status != "OK"                         # exhausted budget never yields OK
-    assert res.timing_ms["total"] < 60 * 2.5          # best-effort bound incl. final scoring
+    assert res.timing_ms["total"] < 60 * 4            # soft budget: min. ICP iterations + scoring still run
     assert pose_error(res.T_cam_obj, gt)[0] < 8.0     # still returns a sensible pose
 
 

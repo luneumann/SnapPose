@@ -55,7 +55,7 @@ def build_model(object_id: str, mesh: trimesh.Trimesh, symmetry: Symmetry | None
     sel = rng.choice(len(points), min(N_SCORE_POINTS, len(points)), replace=False)
     center = (lo + hi) / 2
     return Model(object_id, points, normals, center, float(np.linalg.norm(extents) / 2), extents,
-                 bool(mesh.is_watertight), symmetry or Symmetry(), cKDTree(points),
+                 bool(mesh.is_volume), symmetry or Symmetry(), cKDTree(points),
                  points[sel], normals[sel])
 
 
