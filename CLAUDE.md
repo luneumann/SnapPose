@@ -4,9 +4,9 @@ Bestimmt die Lage (T_cam_obj, mm) **eines bekannten CAD-Objekts** in **einem RGB
 objektspezifisches Training. Zeit vs. Genauigkeit per Profil (`fast`/`balanced`/`precise`), Einzelparameter
 und Zeitbudget steuerbar. Ausführliche Spezifikation: `docs/SPEC.md` (lokal, nicht im öffentlichen Repo).
 
-**Stand V1 (Iteration 1+2 der Spec):** Prior-Modus (Lage grob bekannt), reine Tiefen-Pipeline auf CPU
-(Sobol-Hypothesen → Multi-Hypothesen-ICP mit Successive Halving → Scoring → Fein-ICP → Verifikation).
-**Noch nicht:** globaler Modus (DINOv2/Templates), MegaPose-Refiner, RGB-Nutzung, Dienst-API.
+**Stand V1:** Prior-Modus (Lage grob bekannt), CPU. Tiefen-Pipeline (Sobol-Hypothesen → Multi-Hypothesen-ICP mit
+Successive Halving → Scoring → Fein-ICP → Verifikation) plus optional Bildkanten als zweiter Kandidat mit Arbitrierung.
+**Noch nicht:** globaler Modus (DINOv2/Templates), MegaPose-Refiner, Dienst-API.
 
 ```
 CAD → onboard (Punkte+Normalen, Cache) ─┐
