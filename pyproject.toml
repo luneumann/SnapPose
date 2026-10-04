@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "snappose"
 version = "0.1.0"
-description = "Single-shot 6D pose matching of a known CAD object in one RGB-D frame (prior mode, CPU-only, configurable time/accuracy)"
+description = "6D pose estimation of a known CAD part from a single RGB-D image"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
